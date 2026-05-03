@@ -1,0 +1,10 @@
+build*/
+*.so
+*.dll
+*.exe
+*.log
+*.bak
+*.backup
+*.user
+*.swp
+__pycache__/
