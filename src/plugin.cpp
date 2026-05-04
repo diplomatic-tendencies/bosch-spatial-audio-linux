@@ -184,6 +184,13 @@ mumble_init(mumble_plugin_id_t id) {
         if (g_pluginID && g_api.log) g_api.log(g_pluginID, msg.c_str());
         FalloffConnection::logToFile(msg);
     };
+    if (!g_cfg.fileFound) {
+        g_cfg.enabled = false;
+        initLog(std::string("[theisle_spatial] disabled reason=missing_ini expected=") + iniPath);
+    } else if (g_cfg.enabled && !Config::hasUsableApiKey(g_cfg.apiKey)) {
+        g_cfg.enabled = false;
+        initLog("[theisle_spatial] disabled reason=missing_api_key");
+    }
     initLog(std::string("[theisle_spatial] ini_path=") + g_cfg.loadedFrom
             + " found=" + (g_cfg.fileFound ? "1" : "0"));
     {

@@ -19,8 +19,8 @@ struct Config {
     int serverPort = 8890;
     std::string activeServer;
     std::string selectedServer = "legacy";
-    std::string apiKey = "change_me";
-    bool enabled = true;
+    std::string apiKey;
+    bool enabled = false;
     bool debugLog = false;
     float smoothAlpha = 0.80f;
     float panSmoothAlpha = 0.95f;
@@ -32,6 +32,7 @@ struct Config {
         std::ifstream f(iniPath);
         if (!f.is_open()) return cfg;
         cfg.fileFound = true;
+        cfg.enabled = true;
         ServerEndpoint legacyServer;
         legacyServer.host = cfg.serverHost;
         legacyServer.port = cfg.serverPort;
@@ -96,6 +97,9 @@ struct Config {
         if (a == std::string::npos) return "";
         size_t b = s.find_last_not_of(ws);
         return s.substr(a, b - a + 1);
+    }
+    static bool hasUsableApiKey(const std::string& key) {
+        return !key.empty() && key != "change_me" && key != "YOUR_REAL_KEY";
     }
 private:
     static bool assignProfileHost(std::unordered_map<std::string, ServerEndpoint>& profiles,

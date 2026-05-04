@@ -174,8 +174,8 @@ static std::string resolveIP(const std::string& host, int preferFamily) {
     return buffer;
 }
 bool FalloffConnection::tryConnect() {
-    if (m_cfg.apiKey.empty()) {
-        logMsg(m_cfg, m_onLog, "falloff_connect_skip reason=empty_api_key");
+    if (!Config::hasUsableApiKey(m_cfg.apiKey)) {
+        logMsg(m_cfg, m_onLog, "falloff_connect_skip reason=missing_api_key");
         return false;
     }
     if (m_uid.empty()) {
