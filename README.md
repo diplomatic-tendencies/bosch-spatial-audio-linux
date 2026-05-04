@@ -43,18 +43,21 @@ cp build/theisle_spatial.so ~/.var/app/info.mumble.Mumble/data/Mumble/Mumble/Plu
 cp theisle_spatial.ini ~/.var/app/info.mumble.Mumble/data/Mumble/Mumble/Plugins/
 ```
 
+Snap Mumble usually uses:
+
+```sh
+mkdir -p ~/snap/mumble/current/.local/share/Mumble/Mumble/Plugins
+cp build/theisle_spatial.so ~/snap/mumble/current/.local/share/Mumble/Mumble/Plugins/
+cp theisle_spatial.ini ~/snap/mumble/current/.local/share/Mumble/Mumble/Plugins/
+```
+
 Restart Mumble after copying the files. The plugin should appear under `Configure > Plugins` as `Bosch Island - Spatial Audio`.
 
 ## config
 
 Edit the `.ini` next to the `.so` before starting Mumble:
 
-```ini
-api_key=YOUR_REAL_KEY
-active_server=server2
-```
-
-`api_key=change_me` is treated as unset. The plugin will load, but it will not connect to the falloff server until a real key is set.
+The included config matches the current Bosch falloff server. Leave `api_key=change_me` unless the server admin gives you a different key.
 
 Set `debug_log=1` while testing. The normal build writes `theisle_spatial.log` next to the plugin. The Steam Deck build writes `theisle_spatial_steamdeck.log`.
 

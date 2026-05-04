@@ -187,9 +187,9 @@ mumble_init(mumble_plugin_id_t id) {
     if (!g_cfg.fileFound) {
         g_cfg.enabled = false;
         initLog(std::string("[theisle_spatial] disabled reason=missing_ini expected=") + iniPath);
-    } else if (g_cfg.enabled && !Config::hasUsableApiKey(g_cfg.apiKey)) {
+    } else if (g_cfg.enabled && g_cfg.apiKey.empty()) {
         g_cfg.enabled = false;
-        initLog("[theisle_spatial] disabled reason=missing_api_key");
+        initLog("[theisle_spatial] disabled reason=empty_api_key");
     }
     initLog(std::string("[theisle_spatial] ini_path=") + g_cfg.loadedFrom
             + " found=" + (g_cfg.fileFound ? "1" : "0"));

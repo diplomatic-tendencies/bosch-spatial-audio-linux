@@ -174,8 +174,8 @@ static std::string resolveIP(const std::string& host, int preferFamily) {
     return buffer;
 }
 bool FalloffConnection::tryConnect() {
-    if (!Config::hasUsableApiKey(m_cfg.apiKey)) {
-        logMsg(m_cfg, m_onLog, "falloff_connect_skip reason=missing_api_key");
+    if (m_cfg.apiKey.empty()) {
+        logMsg(m_cfg, m_onLog, "falloff_connect_skip reason=empty_api_key");
         return false;
     }
     if (m_uid.empty()) {
@@ -224,6 +224,7 @@ bool FalloffConnection::tryConnect() {
         logMsg(m_cfg, m_onLog, diag);
         return false;
     }
+    m_sock.store((uintptr_t)socket);
     setSocketTimeout(socket, SO_SNDTIMEO, 5000);
     setSocketTimeout(socket, SO_RCVTIMEO, 30000);
     if (connect(socket, (sockaddr*)&addr, sizeof(addr)) != 0) {
@@ -232,7 +233,7 @@ bool FalloffConnection::tryConnect() {
             "falloff_connect_fail reason=connect host=%s port=%d resolved_ip=%s socket_family=AF_INET error=%d",
             m_cfg.serverHost.c_str(), m_cfg.serverPort, resolvedIP.c_str(), lastSocketError());
         logMsg(m_cfg, m_onLog, diag);
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     }
     std::string caps = "{\"version\":\"1.0\",\"features\":[\"spatial\"]}";
@@ -251,7 +252,7 @@ bool FalloffConnection::tryConnect() {
             "falloff_connect_fail reason=send_incomplete sent=%d expected=%d",
             sent, (int)hello.size());
         logMsg(m_cfg, m_onLog, diag);
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     }
     logMsg(m_cfg, m_onLog, "falloff_hello_sent bytes_ok=1");
@@ -259,7 +260,7 @@ bool FalloffConnection::tryConnect() {
     int received = recv(socket, buffer, (int)sizeof(buffer) - 1, 0);
     if (received == 0) {
         logMsg(m_cfg, m_onLog, "falloff_hello_reply close_reason=server_closed");
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     }
     if (received < 0) {
@@ -267,7 +268,7 @@ bool FalloffConnection::tryConnect() {
         snprintf(diag, sizeof(diag),
             "falloff_hello_reply close_reason=recv_error error=%d", lastSocketError());
         logMsg(m_cfg, m_onLog, diag);
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     }
     buffer[received] = '\0';
@@ -276,15 +277,14 @@ bool FalloffConnection::tryConnect() {
         logMsg(m_cfg, m_onLog, "falloff_hello_reply ok");
     } else if (reply.find("ERR") != std::string::npos) {
         logMsg(m_cfg, m_onLog, "falloff_hello_reply unauthorized");
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     } else {
         logMsg(m_cfg, m_onLog, "falloff_hello_reply malformed_reply");
-        closeSocketHandle(socket);
+        closeSocket();
         return false;
     }
     setSocketTimeout(socket, SO_RCVTIMEO, 10000);
-    m_sock.store((uintptr_t)socket);
     m_connected = true;
     return true;
 }

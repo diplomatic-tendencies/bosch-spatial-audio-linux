@@ -98,9 +98,6 @@ struct Config {
         size_t b = s.find_last_not_of(ws);
         return s.substr(a, b - a + 1);
     }
-    static bool hasUsableApiKey(const std::string& key) {
-        return !key.empty() && key != "change_me" && key != "YOUR_REAL_KEY";
-    }
 private:
     static bool assignProfileHost(std::unordered_map<std::string, ServerEndpoint>& profiles,
                                   const std::string& key,
