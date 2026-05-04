@@ -158,20 +158,12 @@ void FalloffConnection::closeSocket() {
     if (socket == kInvalidSocket) return;
     closeSocketHandle(socket);
 }
-static std::string resolveIP(const std::string& host, int preferFamily) {
-    addrinfo hints{};
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = preferFamily;
-    addrinfo* result = nullptr;
-    if (getaddrinfo(host.c_str(), nullptr, &hints, &result) != 0 || !result) return "";
-    char buffer[INET6_ADDRSTRLEN] = {};
-    if (result->ai_family == AF_INET) {
-        inet_ntop(AF_INET, &((sockaddr_in*)result->ai_addr)->sin_addr, buffer, sizeof(buffer));
-    } else if (result->ai_family == AF_INET6) {
-        inet_ntop(AF_INET6, &((sockaddr_in6*)result->ai_addr)->sin6_addr, buffer, sizeof(buffer));
+static const char* familyName(int family) {
+    switch (family) {
+        case AF_INET:  return "AF_INET";
+        case AF_INET6: return "AF_INET6";
+        default:       return "unknown";
     }
-    freeaddrinfo(result);
-    return buffer;
 }
 bool FalloffConnection::tryConnect() {
     if (m_cfg.apiKey.empty()) {
@@ -183,58 +175,81 @@ bool FalloffConnection::tryConnect() {
         return false;
     }
     initializeSockets();
-    std::string resolvedIP = resolveIP(m_cfg.serverHost, AF_INET);
-    int resolvedFamily = AF_INET;
-    if (resolvedIP.empty()) {
-        resolvedIP = resolveIP(m_cfg.serverHost, AF_UNSPEC);
-        resolvedFamily = AF_UNSPEC;
+    char portStr[16];
+    snprintf(portStr, sizeof(portStr), "%d", m_cfg.serverPort);
+    addrinfo hints{};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_family   = AF_UNSPEC;
+    addrinfo* result = nullptr;
+    int gaiErr = getaddrinfo(m_cfg.serverHost.c_str(), portStr, &hints, &result);
+    if (gaiErr != 0 || !result) {
+        char diag[160];
+        snprintf(diag, sizeof(diag),
+            "falloff_connect_fail reason=resolve_failed host=%s gai_error=%d",
+            m_cfg.serverHost.c_str(), gaiErr);
+        logMsg(m_cfg, m_onLog, diag);
+        return false;
+    }
+    socket_t socket = kInvalidSocket;
+    int lastErr = 0;
+    int chosenFamily = AF_UNSPEC;
+    char chosenIP[INET6_ADDRSTRLEN] = {};
+    for (addrinfo* ai = result; ai != nullptr; ai = ai->ai_next) {
+        char ipBuf[INET6_ADDRSTRLEN] = {};
+        getnameinfo(ai->ai_addr, (socklen_t)ai->ai_addrlen, ipBuf, sizeof(ipBuf),
+                    nullptr, 0, NI_NUMERICHOST);
+        {
+            char diag[256];
+            snprintf(diag, sizeof(diag),
+                "falloff_connect_attempt host=%s port=%d resolved_ip=%s family=%s",
+                m_cfg.serverHost.c_str(), m_cfg.serverPort,
+                ipBuf[0] ? ipBuf : "none", familyName(ai->ai_family));
+            logMsg(m_cfg, m_onLog, diag);
+        }
+        socket_t s = ::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+        if (s == kInvalidSocket) {
+            lastErr = lastSocketError();
+            char diag[128];
+            snprintf(diag, sizeof(diag),
+                "falloff_connect_fail reason=socket_create family=%s error=%d",
+                familyName(ai->ai_family), lastErr);
+            logMsg(m_cfg, m_onLog, diag);
+            continue;
+        }
+        m_sock.store((uintptr_t)s);
+        setSocketTimeout(s, SO_SNDTIMEO, 5000);
+        setSocketTimeout(s, SO_RCVTIMEO, 30000);
+        if (connect(s, ai->ai_addr, (socklen_t)ai->ai_addrlen) != 0) {
+            lastErr = lastSocketError();
+            char diag[224];
+            snprintf(diag, sizeof(diag),
+                "falloff_connect_fail reason=connect host=%s port=%d resolved_ip=%s socket_family=%s error=%d",
+                m_cfg.serverHost.c_str(), m_cfg.serverPort, ipBuf,
+                familyName(ai->ai_family), lastErr);
+            logMsg(m_cfg, m_onLog, diag);
+            closeSocket();
+            continue;
+        }
+        socket = s;
+        chosenFamily = ai->ai_family;
+        snprintf(chosenIP, sizeof(chosenIP), "%s", ipBuf);
+        break;
+    }
+    freeaddrinfo(result);
+    if (socket == kInvalidSocket) {
+        char diag[160];
+        snprintf(diag, sizeof(diag),
+            "falloff_connect_fail reason=all_addrs_failed host=%s last_error=%d",
+            m_cfg.serverHost.c_str(), lastErr);
+        logMsg(m_cfg, m_onLog, diag);
+        return false;
     }
     {
-        char diag[256];
+        char diag[160];
         snprintf(diag, sizeof(diag),
-            "falloff_connect_attempt host=%s port=%d resolved_ip=%s family=%s",
-            m_cfg.serverHost.c_str(), m_cfg.serverPort,
-            resolvedIP.empty() ? "none" : resolvedIP.c_str(),
-            resolvedFamily == AF_INET ? "AF_INET" : "AF_UNSPEC");
+            "falloff_connect_ok resolved_ip=%s family=%s",
+            chosenIP, familyName(chosenFamily));
         logMsg(m_cfg, m_onLog, diag);
-    }
-    if (resolvedIP.empty()) {
-        char diag[128];
-        snprintf(diag, sizeof(diag),
-            "falloff_connect_fail reason=resolve_failed host=%s error=%d",
-            m_cfg.serverHost.c_str(), lastSocketError());
-        logMsg(m_cfg, m_onLog, diag);
-        return false;
-    }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)m_cfg.serverPort);
-    if (inet_pton(AF_INET, resolvedIP.c_str(), &addr.sin_addr) != 1) {
-        char diag[128];
-        snprintf(diag, sizeof(diag),
-            "falloff_connect_fail reason=inet_pton_failed resolved_ip=%s",
-            resolvedIP.c_str());
-        logMsg(m_cfg, m_onLog, diag);
-        return false;
-    }
-    socket_t socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (socket == kInvalidSocket) {
-        char diag[64];
-        snprintf(diag, sizeof(diag), "falloff_connect_fail reason=socket_create error=%d", lastSocketError());
-        logMsg(m_cfg, m_onLog, diag);
-        return false;
-    }
-    m_sock.store((uintptr_t)socket);
-    setSocketTimeout(socket, SO_SNDTIMEO, 5000);
-    setSocketTimeout(socket, SO_RCVTIMEO, 30000);
-    if (connect(socket, (sockaddr*)&addr, sizeof(addr)) != 0) {
-        char diag[192];
-        snprintf(diag, sizeof(diag),
-            "falloff_connect_fail reason=connect host=%s port=%d resolved_ip=%s socket_family=AF_INET error=%d",
-            m_cfg.serverHost.c_str(), m_cfg.serverPort, resolvedIP.c_str(), lastSocketError());
-        logMsg(m_cfg, m_onLog, diag);
-        closeSocket();
-        return false;
     }
     std::string caps = "{\"version\":\"1.0\",\"features\":[\"spatial\"]}";
     std::string hello = "HELLO " + m_cfg.apiKey + " " + m_uid + " " + caps + "\n";
