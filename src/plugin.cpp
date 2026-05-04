@@ -1,4 +1,5 @@
 #define MUMBLE_PLUGIN_NO_DEFAULT_FUNCTION_DEFINITIONS 
+#define MUMBLE_PLUGIN_API_MINOR_MACRO 0
 #include "MumblePlugin.h"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 
@@ -219,6 +220,10 @@ mumble_getName() {
 MUMBLE_PLUGIN_EXPORT mumble_version_t MUMBLE_PLUGIN_CALLING_CONVENTION
 mumble_getAPIVersion() {
     return { MUMBLE_PLUGIN_API_MAJOR_MACRO, MUMBLE_PLUGIN_API_MINOR_MACRO, MUMBLE_PLUGIN_API_PATCH_MACRO };
+}
+MUMBLE_PLUGIN_EXPORT mumble_version_t
+mumble_getPluginFunctionsVersion() {
+    return MUMBLE_PLUGIN_FUNCTIONS_VERSION;
 }
 MUMBLE_PLUGIN_EXPORT void MUMBLE_PLUGIN_CALLING_CONVENTION
 mumble_registerAPIFunctions(void* apiStruct) {
