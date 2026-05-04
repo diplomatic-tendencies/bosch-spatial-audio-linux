@@ -39,7 +39,7 @@ private:
     std::thread m_thread;
     std::atomic<bool> m_stop{false};
     std::atomic<bool> m_connected{false};
-    uintptr_t m_sock = (uintptr_t)(~0ULL);
+    std::atomic<uintptr_t> m_sock{(uintptr_t)(~0ULL)};
     std::atomic<uint32_t> m_frameCount{0};
     std::atomic<uint32_t> m_rxLineCount{0};
 };

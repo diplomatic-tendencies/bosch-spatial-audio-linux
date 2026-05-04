@@ -92,7 +92,7 @@ static std::atomic<uint32_t> g_staleEvictions{0};
 static std::atomic<uint64_t> g_lastUnknownRefreshMs{0};
 static std::unordered_set<std::string> g_mappingLogged;
 static void pluginLog(const char* msg) {
-    if (g_pluginID && g_cfg.debugLog)
+    if (g_pluginID && g_cfg.debugLog && g_api.log)
         g_api.log(g_pluginID, msg);
 }
 static void refreshHashMap() {
@@ -181,7 +181,7 @@ mumble_init(mumble_plugin_id_t id) {
     const std::string logPath = (moduleDir / pluginLogFileName()).string();
     FalloffConnection::openLogFile(logPath);
     auto initLog = [&](const std::string& msg) {
-        if (g_pluginID) g_api.log(g_pluginID, msg.c_str());
+        if (g_pluginID && g_api.log) g_api.log(g_pluginID, msg.c_str());
         FalloffConnection::logToFile(msg);
     };
     initLog(std::string("[theisle_spatial] ini_path=") + g_cfg.loadedFrom
@@ -235,7 +235,7 @@ mumble_releaseResource(const void* ptr) {
 }
 MUMBLE_PLUGIN_EXPORT mumble_version_t MUMBLE_PLUGIN_CALLING_CONVENTION
 mumble_getVersion() {
-    return { 1, 0, 1 };
+    return { 1, 0, 2 };
 }
 MUMBLE_PLUGIN_EXPORT MumbleStringWrapper MUMBLE_PLUGIN_CALLING_CONVENTION
 mumble_getAuthor() {
@@ -448,10 +448,11 @@ mumble_onAudioOutputAboutToPlay(float* , uint32_t ,
                                 uint16_t , uint32_t ) {
     return false;
 }
-MUMBLE_PLUGIN_EXPORT void MUMBLE_PLUGIN_CALLING_CONVENTION
-mumble_onDeactivated(uint32_t features) {
+MUMBLE_PLUGIN_EXPORT uint32_t MUMBLE_PLUGIN_CALLING_CONVENTION
+mumble_deactivateFeatures(uint32_t features) {
     if (features & MUMBLE_FEATURE_AUDIO) {
         g_audio.reset();
         pluginLog("[theisle_spatial] audio feature deactivated - gains reset");
     }
+    return 0;
 }

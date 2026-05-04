@@ -154,10 +154,9 @@ void FalloffConnection::stop() {
     m_connected = false;
 }
 void FalloffConnection::closeSocket() {
-    socket_t socket = (socket_t)m_sock;
+    socket_t socket = (socket_t)m_sock.exchange((uintptr_t)kInvalidSocket);
     if (socket == kInvalidSocket) return;
     closeSocketHandle(socket);
-    m_sock = (uintptr_t)kInvalidSocket;
 }
 static std::string resolveIP(const std::string& host, int preferFamily) {
     addrinfo hints{};
@@ -285,7 +284,7 @@ bool FalloffConnection::tryConnect() {
         return false;
     }
     setSocketTimeout(socket, SO_RCVTIMEO, 10000);
-    m_sock = (uintptr_t)socket;
+    m_sock.store((uintptr_t)socket);
     m_connected = true;
     return true;
 }
@@ -347,7 +346,7 @@ void FalloffConnection::run() {
         }
         backoffSec = 1;
         if (m_onHelloOk) m_onHelloOk();
-        socket_t socket = (socket_t)m_sock;
+        socket_t socket = (socket_t)m_sock.load();
         std::string buffer;
         char chunk[2048];
         static const char kPing[] = "PING\n";
